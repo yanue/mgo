@@ -26,6 +26,11 @@ func runTest1() {
 		Data: map[string]interface{}{"a": 1, "b": 2},
 	}
 
+	c := TestModel.DropIndex(TestModel.getCollection(), "name_1")
+	log.Println("c", c)
+	a, b := TestModel.CreateIndex(TestModel.getCollection(), map[string]int{"name": 1, "age": -1}, true)
+	log.Println("CreateIndex a, b", a, b)
+
 	id, err := TestModel.Create(item)
 	log.Println("id", id, err)
 

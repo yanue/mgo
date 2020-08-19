@@ -12,24 +12,6 @@ import (
 	"time"
 )
 
-type MgoInterface interface {
-	GetCollection(collName string) *mongo.Collection
-	GetLastId(coll *mongo.Collection) int
-	Count(coll *mongo.Collection, where map[string]interface{}) (cnt int64, err error)
-	GetByField(coll *mongo.Collection, result interface{}, field string, val interface{}) (err error)
-	GetOneByMap(coll *mongo.Collection, result interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
-	GetAllByMap(coll *mongo.Collection, results interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
-	List(coll *mongo.Collection, results interface{}, where map[string]interface{}, page, size int, sorts ...map[string]int) (err error)
-	Update(coll *mongo.Collection, id interface{}, input map[string]interface{}) error
-	UpdateByMap(coll *mongo.Collection, where map[string]interface{}, input map[string]interface{}) error
-	Create(coll *mongo.Collection, item interface{}) error
-	Save(coll *mongo.Collection, id interface{}, data interface{}) error
-	ForceDelete(coll *mongo.Collection, id interface{}) error
-	ForceDeleteByMap(coll *mongo.Collection, where map[string]interface{}) error
-	Aggregate(coll *mongo.Collection, pipeStr string, results interface{}) error
-	parsePipeline(str string) (pipeline mongo.Pipeline, err error)
-}
-
 var mgoCli *mongo.Client
 var mongoDbName string
 var collMap = new(sync.Map)
@@ -408,6 +390,25 @@ func (model *Mgo) parsePipeline(str string) (pipeline mongo.Pipeline, err error)
 		}
 	}
 	return
+}
+
+// 创建索引: keys: map[字段名]排序方式(-1|1)
+func (model *Mgo) CreateIndex(coll *mongo.Collection, keys map[string]int, Unique bool) (string, error) {
+	if len(keys) == 0 {
+		return "", nil
+	}
+	idx := mongo.IndexModel{
+		Keys:    keys,
+		Options: options.Index().SetUnique(Unique),
+	}
+	result, err := coll.Indexes().CreateOne(getContext(), idx)
+	return result, err
+}
+
+// 删除索引
+func (model *Mgo) DropIndex(coll *mongo.Collection, name string) error {
+	_, err := coll.Indexes().DropOne(getContext(), name)
+	return err
 }
 
 func getContext() context.Context {

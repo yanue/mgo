@@ -14,7 +14,10 @@ func TestMgo_Connect(t *testing.T) {
 		log.Println("init mongo err: ", err.Error())
 		return
 	}
-
+	c := TestModel.DropIndex(TestModel.getCollection(), "name_1")
+	log.Println("c", c)
+	a, b := TestModel.CreateIndex(TestModel.getCollection(), map[string]int{"name": 1, "age": -1}, true)
+	log.Println("CreateIndex a, b", a, b)
 	item := &Test{
 		Name: "aaaaaaaaa",
 		Data: map[string]interface{}{"a": 1, "b": 2},
@@ -26,10 +29,10 @@ func TestMgo_Connect(t *testing.T) {
 	row, err := TestModel.Get(id)
 	log.Println("row", row, err)
 
-	err = TestModel.Update(id, map[string]interface{}{"name": "bbbbbbbbb"})
+	err = TestModel.Update(id, map[string]interface{}{"name": "bbbbbbbbb", "age": 28})
 	log.Println("update", err)
 
-	list, err := TestModel.GetAllByMap(map[string]interface{}{"name": "bbbbbbbbb"})
+	list, err := TestModel.GetAllByMap(map[string]interface{}{"name": "bbbbbbbbb", "age": 28})
 	log.Println("list", list, err)
 
 	// 聚合查询
@@ -55,6 +58,7 @@ var TestModel = new(testModel)
 type Test struct {
 	Id        int         `json:"id" bson:"_id"` // 自增涨id
 	Name      string      `json:"name" bson:"name"`
+	Age       int         `json:"age" bson:"age"`
 	Data      interface{} `json:"data" bson:"data"`
 	IsDeleted int         `json:"is_deleted" json:"is_deleted"`
 	Created   int         `json:"created" bson:"created"`
