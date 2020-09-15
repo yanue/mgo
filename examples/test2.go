@@ -11,7 +11,13 @@ import (
 )
 
 // 单例模式对外导出方法
-var Test2Model = new(test2Model)
+var Test2Model = newTest2Model()
+
+func newTest2Model() *test2Model {
+	m := new(test2Model)
+	m.Mgo.SetCollName("test2")
+	return m
+}
 
 // 表(集合)信息
 type Test2 struct {
@@ -30,39 +36,30 @@ type test2Model struct {
 	coll    *mongo.Collection
 }
 
-// 连接Collection
-func (model *test2Model) getCollection() *mongo.Collection {
-	if nil == model.coll {
-		// 重点: 表名(集合名collection)
-		model.coll = model.Mgo.GetCollection("test2")
-	}
-	return model.coll
-}
-
 // 通过多个字段map查询单个数据
 func (model *test2Model) GetOneByMap(where map[string]interface{}, sorts ...map[string]int) (item *Test2, err error) {
 	item = new(Test2)
-	err = model.Mgo.GetOneByMap(model.getCollection(), item, where, sorts...)
+	err = model.Mgo.GetOneByMap(item, where, sorts...)
 	return
 }
 
 // 通过多个字段map查询多条数据
 func (model *test2Model) GetAllByMap(where map[string]interface{}, sorts ...map[string]int) (items []*Test2, err error) {
 	items = make([]*Test2, 0)
-	err = model.Mgo.GetAllByMap(model.getCollection(), &items, where, sorts...)
+	err = model.Mgo.GetAllByMap(&items, where, sorts...)
 	return
 }
 
 // 创建
 func (model *test2Model) Create(item *Test2) error {
 	item.Created = int(time.Now().Unix())
-	err := model.Mgo.Create(model.getCollection(), item)
+	err := model.Mgo.Create(item)
 	return err
 }
 
 // 通过mongo.driver原始操作
 func (model *test2Model) GetByMongoFind(where map[string]interface{}, sorts ...map[string]int) (item *Test2, err error) {
-	coll := model.getCollection()
+	coll := model.GetCollection()
 	filter := bson.M{}
 	for k, v := range where {
 		filter[k] = v
