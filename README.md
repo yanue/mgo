@@ -1,28 +1,36 @@
-## 基于mongo-driver封装的简化操作合集,主要封装方法:
-```go
-   type IMgo interface {
-   	SetCollName(collName string)
-   	GetCollName() string
-   	GetCollection() *mongo.Collection
-   	GetLastId() int
-   	SetLastId(int)
-   	Count(where map[string]interface{}) (cnt int64, err error)
-   	Update(id interface{}, input map[string]interface{}) error
-   	UpdateByMap(where map[string]interface{}, input map[string]interface{}) error
-   	Create(item interface{}) error
-   	Save(id interface{}, data interface{}) error
-   	ForceDelete(id interface{}) error
-   	ForceDeleteByMap(where map[string]interface{}) error
-   	GetByField(result interface{}, field string, val interface{}) (err error)
-   	GetOneByMap(result interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
-   	GetAllByMap(results interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
-   	List(results interface{}, where map[string]interface{}, page, size int, sorts ...map[string]int) (err error)
-   	Aggregate(pipeStr string, results interface{}) error
-   }
-```	
+## 基于mongo-driver封装的简化操作合集
+
+### 主要封装方法:
+
+```
+  type IMgo interface {
+    GetMgoCli() *mongo.Client
+    SetCollName(collName string)
+    GetCollName() string
+    GetCollection() *mongo.Collection
+    GetLastId() int
+    SetLastId(int)
+    Count(where map[string]interface{}) (cnt int64, err error)
+    Update(id interface{}, input map[string]interface{}) error
+    UpdateByMap(where map[string]interface{}, input map[string]interface{}) error
+    Create(item interface{}) error
+    InsertMany(item []interface{}) error
+    Save(id interface{}, data interface{}) error
+    ForceDelete(id interface{}) error
+    ForceDeleteByMap(where map[string]interface{}) error
+    GetByField(result interface{}, field string, val interface{}) (err error)
+    GetOneByMap(result interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
+    GetAllByMap(results interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
+    List(results interface{}, where map[string]interface{}, page, size int, sorts ...map[string]int) (err error)
+    Aggregate(pipeStr string, results interface{}) error
+    CreateIndex(keys bson.D, Unique bool) (string, error)
+    DropIndex(name string) error
+  }
+```
 
 ### 第一步,初始化mongo连接
-```go
+
+```
 	m, err := mgo.InitMongoClient(config.MongoUri, config.MongoDbName)
 	if err != nil {
 		log.Println("mongo连接失败:", err.Error())
@@ -31,7 +39,8 @@
 ```
 
 ### 第二步,新建model,继承Mgo
-```go
+
+```
     // 单例模式对外导出方法
     var TestModel = newTestModel()
     
@@ -125,48 +134,51 @@
         err = model.Mgo.Aggregate(pipeStr, items)
         return
     }
-
-
-```	
-
+```
 
 ### 第三步,使用model,测试
-```go
-    _, err := InitMongoClient("mongodb://localhost:27017", "test", 20)
-    if err != nil {
-        log.Println("init mongo err: ", err.Error())
-        return
-    }
 
-    item := &Test{
-        Name: "aaaaaaaaa",
-        Data: map[string]interface{}{"a": 1, "b": 2},
-    }
+```
+    _, err := InitMongoClient("mongodb://127.0.0.1:27017", "cc", 20)
+	if err != nil {
+		log.Println("init mongo err: ", err.Error())
+		return
+	}
+	TestModel.CreateIndex(bson.D{bson.E{Key: "uid", Value: -1}, bson.E{Key: "account_id", Value: -1}, bson.E{Key: "period", Value: -1}}, false)
+	TestModel.CreateIndex(bson.D{bson.E{Key: "uid", Value: -1}, bson.E{Key: "period", Value: -1}, bson.E{Key: "account_id", Value: -1}}, false)
+	c := TestModel.DropIndex("name_1")
+	log.Println("c", c)
+	a, b := TestModel.CreateIndex(bson.D{}, true)
+	log.Println("CreateIndex a, b", a, b)
+	item := &Test{
+		Name: "aaaaaaaaa",
+		Data: map[string]interface{}{"a": 1, "b": 2},
+	}
 
-    id, err := TestModel.Create(item)
-    log.Println("id", id, err)
+	id, err := TestModel.Create(item)
+	log.Println("id", id, err)
 
-    row, err := TestModel.Get(id)
-    log.Println("row", row, err)
+	row, err := TestModel.Get(id)
+	log.Println("row", row, err)
 
-    err = TestModel.Update(id, map[string]interface{}{"name": "bbbbbbbbb"})
-    log.Println("update", err)
+	err = TestModel.Update(id, map[string]interface{}{"name": "bbbbbbbbb", "age": 28})
+	log.Println("update", err)
 
-    list, err := TestModel.GetAllByMap(map[string]interface{}{"name": "bbbbbbbbb"})
-    log.Println("list", list, err)
+	list, err := TestModel.GetAllByMap(map[string]interface{}{"name": "bbbbbbbbb", "age": 28})
+	log.Println("list", list, err)
 
-    // 聚合查询
-    //pipeline := `[
-    //	{"$match": { "color": "Red" }},
-    //	{"$group": { "_id": "$brand", "count": { "$sum": 1 } }},
-    //	{"$project": { "brand": "$_id", "_id": 0, "count": 1 }}
-    //]`
-    pipeline := `[
-        {"$match": { "name": bbbbbbbbb }}
-    ]`
-    items, err := TestModel.Aggregate(pipeline)
-    fmt.Println("items", items, err)
-    for _, v := range items {
-        fmt.Println("v", *v)
-    }
+	// 聚合查询
+	//pipeline := `[
+	//	{"$match": { "color": "Red" }},
+	//	{"$group": { "_id": "$brand", "count": { "$sum": 1 } }},
+	//	{"$project": { "brand": "$_id", "_id": 0, "count": 1 }}
+	//]`
+	pipeline := `[
+		{"$match": { "name": bbbbbbbbb }}
+	]`
+	items, err := TestModel.Aggregate(pipeline)
+	fmt.Println("items", items, err)
+	for _, v := range items {
+		fmt.Println("v", *v)
+	}
 ```

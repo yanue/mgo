@@ -2,20 +2,23 @@ package mgo
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"testing"
 	"time"
 )
 
 func TestMgo_Connect(t *testing.T) {
-	_, err := InitMongoClient("mongodb://localhost:27017", "test", 20)
+	_, err := InitMongoClient("mongodb://127.0.0.1:27017", "cc", 20)
 	if err != nil {
 		log.Println("init mongo err: ", err.Error())
 		return
 	}
+	_, _ = TestModel.CreateIndex(bson.D{bson.E{Key: "uid", Value: -1}, bson.E{Key: "account_id", Value: -1}, bson.E{Key: "period", Value: -1}}, false)
+	_, _ = TestModel.CreateIndex(bson.D{bson.E{Key: "uid", Value: -1}, bson.E{Key: "period", Value: -1}, bson.E{Key: "account_id", Value: -1}}, false)
 	c := TestModel.DropIndex("name_1")
 	log.Println("c", c)
-	a, b := TestModel.CreateIndex(map[string]int{"name": 1, "age": -1}, true)
+	a, b := TestModel.CreateIndex(bson.D{}, true)
 	log.Println("CreateIndex a, b", a, b)
 	item := &Test{
 		Name: "aaaaaaaaa",
@@ -110,7 +113,7 @@ func (model *testModel) List(where map[string]interface{}, page, size int, sorts
 // 创建
 func (model *testModel) Create(item *Test) (int, error) {
 	// 自增获取id
-	item.Id = model.GetLastId() + 1
+	item.Id = model.GetLastId()
 	item.Created = int(time.Now().Unix())
 	err := model.Mgo.Create(item)
 	return item.Id, err

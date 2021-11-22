@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/yanue/mgo"
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"time"
 )
@@ -21,8 +22,8 @@ func newApiLogModel() *apiLogModel {
 
 func (model *apiLogModel) createIndex() {
 	log.Println("正在创建索引： api_log")
-	_, _ = model.Mgo.CreateIndex(map[string]int{"uid": -1}, false)
-	_, _ = model.Mgo.CreateIndex(map[string]int{"created": -1}, false)
+	_, _ = model.Mgo.CreateIndex(bson.D{bson.E{Key: "uid", Value: -1}}, false)
+	_, _ = model.Mgo.CreateIndex(bson.D{bson.E{Key: "created", Value: -1}}, false)
 	log.Println("创建索引完毕： api_log")
 }
 

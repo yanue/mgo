@@ -3,6 +3,7 @@ package mgo
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -12,6 +13,7 @@ import (
 )
 
 type IMgo interface {
+	GetMgoCli() *mongo.Client
 	SetCollName(collName string)
 	GetCollName() string
 	GetCollection() *mongo.Collection
@@ -21,6 +23,7 @@ type IMgo interface {
 	Update(id interface{}, input map[string]interface{}) error
 	UpdateByMap(where map[string]interface{}, input map[string]interface{}) error
 	Create(item interface{}) error
+	InsertMany(item []interface{}) error
 	Save(id interface{}, data interface{}) error
 	ForceDelete(id interface{}) error
 	ForceDeleteByMap(where map[string]interface{}) error
@@ -29,6 +32,8 @@ type IMgo interface {
 	GetAllByMap(results interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
 	List(results interface{}, where map[string]interface{}, page, size int, sorts ...map[string]int) (err error)
 	Aggregate(pipeStr string, results interface{}) error
+	CreateIndex(keys bson.D, Unique bool) (string, error)
+	DropIndex(name string) error
 }
 
 var mgoCli *mongo.Client
@@ -68,6 +73,10 @@ type Mgo struct {
 	lastId   int
 }
 
+func (model *Mgo) GetMgoCli() *mongo.Client {
+	return mgoCli
+}
+
 // 连接表(集合collection)
 func (model *Mgo) SetCollName(collName string) {
 	model.collName = collName
@@ -95,6 +104,7 @@ func (model *Mgo) GetLastId() int {
 	if model.lastId == 0 {
 		model.lastId = model.getLastId()
 	}
+	model.lastId++ // 自增
 	return model.lastId
 }
 
@@ -312,6 +322,20 @@ func (model *Mgo) Create(item interface{}) error {
 }
 
 /**
+ * 批量插入数据 - 通过结构体
+ * param: *mongo.Collection      coll
+ * param: map[string]interface{} item
+ * return: error
+ */
+func (model *Mgo) InsertMany(items []interface{}) error {
+	if len(items) == 0 {
+		return nil
+	}
+	_, err := model.GetCollection().InsertMany(getContext(), items)
+	return err
+}
+
+/**
  * 更新数据 - 通过结构体
  * -- !!!注意!!!
  * -- 这里会覆盖所有字段,除了id
@@ -351,7 +375,7 @@ func (model *Mgo) ForceDeleteByMap(where map[string]interface{}) error {
 	for k, v := range where {
 		whereC[k] = v
 	}
-	log.Println("where", whereC)
+	//log.Println("where", whereC)
 	_, err := model.GetCollection().DeleteMany(getContext(), whereC)
 	return err
 }
@@ -436,16 +460,32 @@ func (model *Mgo) parsePipeline(str string) (pipeline mongo.Pipeline, err error)
 }
 
 // 创建索引: keys: map[字段名]排序方式(-1|1)
-func (model *Mgo) CreateIndex(keys map[string]int, Unique bool) (string, error) {
-	if len(keys) == 0 {
+func (model *Mgo) CreateIndex(keysD bson.D, Unique bool) (string, error) {
+	if len(keysD) == 0 {
 		return "", nil
 	}
 	idx := mongo.IndexModel{
-		Keys:    keys,
+		Keys:    keysD,
 		Options: options.Index().SetUnique(Unique),
+	}
+	var keys []string
+	for _, e := range keysD {
+		keys = append(keys, fmt.Sprintf("%v_%d", e.Key, e.Value))
+	}
+	key := strings.Join(keys, "_")
+	list, err := model.GetCollection().Indexes().ListSpecifications(getContext())
+	for _, item := range list {
+		if item.Name == key {
+			return key, nil
+		}
 	}
 	result, err := model.GetCollection().Indexes().CreateOne(getContext(), idx)
 	return result, err
+}
+
+// 获取索引列表
+func (model *Mgo) ListIndex() ([]*mongo.IndexSpecification, error) {
+	return model.GetCollection().Indexes().ListSpecifications(getContext())
 }
 
 // 删除索引

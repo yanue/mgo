@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/yanue/mgo"
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"time"
 )
@@ -21,9 +22,9 @@ func newUserModel() *userModel {
 
 func (model *userModel) createIndex() {
 	log.Println("正在创建索引： user")
-	_, _ = model.Mgo.CreateIndex(map[string]int{"phone": 1}, true)
-	_, _ = model.Mgo.CreateIndex(map[string]int{"user_name": 1}, true)
-	_, _ = model.Mgo.CreateIndex(map[string]int{"created": -1}, false)
+	_, _ = model.Mgo.CreateIndex(bson.D{bson.E{Key: "phone", Value: 1}}, false)
+	_, _ = model.Mgo.CreateIndex(bson.D{bson.E{Key: "user_name", Value: 1}}, true)
+	_, _ = model.Mgo.CreateIndex(bson.D{bson.E{Key: "created", Value: -1}}, false)
 	log.Println("创建索引完毕： user")
 }
 
