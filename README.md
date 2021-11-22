@@ -1,5 +1,11 @@
 ## 基于mongo-driver封装的简化操作合集
 
+### 安装:
+
+```
+    go get github.com/yanue/mgo
+```
+
 ### 主要封装方法:
 
 ```
