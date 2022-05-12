@@ -3,7 +3,7 @@ module github.com/yanue/mgo/demo
 require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/yanue/mgo v0.0.0-20200819014032-c978fba44fa6
-	go.mongodb.org/mongo-driver v1.8.4
+	go.mongodb.org/mongo-driver v1.9.1
 )
 
 require (
