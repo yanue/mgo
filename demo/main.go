@@ -28,9 +28,21 @@ func main() {
 	// 创建记录
 	l := new(model.ApiLog)
 	l.ApiName = "创建用户"
-	id, err = model.ApiLogModel.Create(l)
+	// 不同库
+	m := model.NewApiLogModel("test_admin")
+	id, err = m.Create(l)
 	log.Println("id, err", id, err)
-	list2, err := model.ApiLogModel.GetAllByMap(map[string]interface{}{}, map[string]int{})
+	list2, err := m.GetAllByMap(map[string]interface{}{}, map[string]int{})
+	log.Println("list,err", list)
+	for _, item := range list2 {
+		log.Println("api_log", *item)
+	}
+
+	// 不同库
+	m1 := model.NewApiLogModel("test_user")
+	id, err = m1.Create(l)
+	log.Println("id, err", id, err)
+	list2, err = m1.GetAllByMap(map[string]interface{}{}, map[string]int{})
 	log.Println("list,err", list)
 	for _, item := range list2 {
 		log.Println("api_log", *item)

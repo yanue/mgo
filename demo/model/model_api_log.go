@@ -8,15 +8,15 @@ import (
 )
 
 // 接口日志相关mongo操作
-var ApiLogModel = newApiLogModel()
 
 type apiLogModel struct {
 	Mgo mgo.Mgo
 }
 
-func newApiLogModel() *apiLogModel {
+func NewApiLogModel(dbName string) *apiLogModel {
 	m := new(apiLogModel)
-	m.Mgo.SetCollName("api_log")
+	m.Mgo.SetDbColl(dbName, "api_log")
+	go m.createIndex()
 	return m
 }
 

@@ -9,41 +9,71 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
 type IMgo interface {
 	GetMgoCli() *mongo.Client
-	SetCollName(collName string)
+	SetDbColl(dbName string, collName string)
+	GetDbName() string
 	GetCollName() string
 	GetCollection() *mongo.Collection
 	GetLastId() int
 	SetLastId(int)
-	Count(where map[string]interface{}) (cnt int64, err error)
-	Update(id interface{}, input map[string]interface{}) error
-	UpdateByMap(where map[string]interface{}, input map[string]interface{}) error
-	Create(item interface{}) error
-	InsertMany(item []interface{}) error
-	Save(id interface{}, data interface{}) error
-	ForceDelete(id interface{}) error
-	ForceDeleteByMap(where map[string]interface{}) error
-	GetByField(result interface{}, field string, val interface{}) (err error)
-	GetOneByMap(result interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
-	GetAllByMap(results interface{}, where map[string]interface{}, sorts ...map[string]int) (err error)
-	List(results interface{}, where map[string]interface{}, page, size int, sorts ...map[string]int) (err error)
-	Aggregate(pipeStr string, results interface{}) error
+	Count(where map[string]any) (cnt int64, err error)
+	Update(id any, input map[string]any) error
+	UpdateByMap(where map[string]any, input map[string]any) error
+	Create(item any) error
+	Save(id any, item any) error
+	InsertMany(item []any) error
+	ForceDelete(id any) error
+	ForceDeleteByMap(where map[string]any) error
+	GetByField(result any, field string, val any) (err error)
+	GetOneByMap(result any, where map[string]any, sorts ...map[string]int) (err error)
+	GetAllByMap(results any, where map[string]any, sorts ...map[string]int) (err error)
+	List(results any, where map[string]any, page, size int, sorts ...map[string]int) (err error)
+	Aggregate(pipeStr string, results any) error
 	CreateIndex(keys bson.D, Unique bool) (string, error)
 	DropIndex(name string) error
 }
 
+type dbCollName struct {
+	dbName   string
+	collName string
+}
+
+type Session struct {
+	sessions map[dbCollName]*mongo.Collection
+	lock     sync.RWMutex
+}
+
+var session = newCollectionHub()
+
+func newCollectionHub() *Session {
+	s := new(Session)
+	s.sessions = make(map[dbCollName]*mongo.Collection, 0)
+	return s
+}
+
+func (s *Session) getSession(name dbCollName) *mongo.Collection {
+	s.lock.Lock()
+	coll, ok := s.sessions[name]
+	if !ok {
+		coll = mgoCli.Database(name.dbName).Collection(name.collName)
+		s.sessions[name] = coll
+	}
+	s.lock.Unlock()
+	return coll
+}
+
 var mgoCli *mongo.Client
-var mongoDbName string
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 }
 
-func InitMongoClient(mongoUri string, dbName string, maxPoolSize uint64) (cli *mongo.Client, err error) {
+func InitMongoClient(mongoUri string, maxPoolSize uint64) (cli *mongo.Client, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cli, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoUri).SetMaxPoolSize(maxPoolSize)) // 最大连接池
@@ -59,69 +89,71 @@ func InitMongoClient(mongoUri string, dbName string, maxPoolSize uint64) (cli *m
 	}
 	// mongo连接信息
 	mgoCli = cli
-	// mongo库名
-	mongoDbName = dbName
 	log.Println("Connected to MongoDB!")
 	return
 }
 
 // 所有model结构体继承Mgo
+
 type Mgo struct {
 	IMgo
-	coll     *mongo.Collection
-	collName string
-	lastId   int
+	session *mongo.Collection
+	coll    dbCollName
+	lastId  int
 }
 
-func (model *Mgo) GetMgoCli() *mongo.Client {
+func (s *Mgo) SetDbColl(dbName string, collName string) {
+	s.coll.dbName = dbName
+	s.coll.collName = collName
+}
+
+func (s *Mgo) GetMgoCli() *mongo.Client {
 	return mgoCli
 }
 
-// 连接表(集合collection)
-func (model *Mgo) SetCollName(collName string) {
-	model.collName = collName
+func (s *Mgo) GetCollName() string {
+	return s.coll.dbName
 }
 
-// 连接表(集合collection)
-func (model *Mgo) GetCollName() string {
-	return model.collName
+func (s *Mgo) GetDbName() string {
+	return s.coll.collName
 }
 
-// 连接表(集合collection)
-func (model *Mgo) GetCollection() *mongo.Collection {
-	if len(model.collName) == 0 {
-		panic("请使用SetCollName方法设置collName")
+func (s *Mgo) GetCollection() *mongo.Collection {
+	if s.session != nil {
+		return s.session
 	}
-	if nil == model.coll {
+	if len(s.coll.dbName) == 0 || len(s.coll.collName) == 0 {
+		panic("请使用SetDbColl方法设置dbName及collName")
+	}
+	if nil == s.session {
 		// 重点: 表名(集合名)
-		model.coll = mgoCli.Database(mongoDbName).Collection(model.collName)
+		s.session = session.getSession(s.coll)
 	}
-	return model.coll
+	return s.session
 }
 
 // 获取自增id
-func (model *Mgo) GetLastId() int {
-	if model.lastId == 0 {
-		model.lastId = model.getLastId()
+
+func (s *Mgo) GetLastId() int {
+	if s.lastId == 0 {
+		s.lastId = s.getLastId()
 	}
-	model.lastId++ // 自增
-	return model.lastId
+	s.lastId++ // 自增
+	return s.lastId
 }
 
 // 设置自增id
-func (model *Mgo) SetLastId(lastId int) {
-	model.lastId = lastId
+
+func (s *Mgo) SetLastId(lastId int) {
+	s.lastId = lastId
 }
 
-/**
- * 获取自增_id最大值
- *
- * param: *mongo.Collection coll
- * return: int
- */
-func (model *Mgo) getLastId() int {
+// 获取自增_id最大值
+
+func (s *Mgo) getLastId() int {
 	// Sort by `_id` field descending
-	result := model.GetCollection().FindOne(getContext(), bson.M{}, options.FindOne().SetSort(bson.D{{"_id", -1}}))
+	result := s.GetCollection().FindOne(getContext(), bson.M{}, options.FindOne().SetSort(bson.D{{"_id", -1}}))
 	if err := result.Err(); err != nil {
 		log.Println("getLastId err:", err.Error())
 		return 0
@@ -137,62 +169,32 @@ func (model *Mgo) getLastId() int {
 	return resp.Id
 }
 
-/**
- * 统计数据
- *
- * param: *mongo.Collection      coll
- * param: map[string]interface{} where
- * return: int64
- * return: error
- */
-func (model *Mgo) Count(where map[string]interface{}) (cnt int64, err error) {
-	// 组装数据
-	filter := bson.M{}
-	for k, v := range where {
-		filter[k] = v
-	}
-	cnt, err = model.GetCollection().CountDocuments(context.Background(), filter)
+// 统计数据
+
+func (s *Mgo) Count(where map[string]any) (cnt int64, err error) {
+	cnt, err = s.GetCollection().CountDocuments(context.Background(), where)
 	return
 }
 
-/**
- * 通过单个字段查找数据
- *
- * param: *mongo.Collection coll
- * param: interface{}       result - 结构体指针
- * param: string            field
- * param: interface{}       val
- * return: error
- */
-func (model *Mgo) GetByField(result interface{}, field string, val interface{}) (err error) {
-	res := model.GetCollection().FindOne(context.Background(), bson.M{field: val})
+// 通过单个字段查找数据
+
+func (s *Mgo) GetByField(result any, field string, val any) (err error) {
+	res := s.GetCollection().FindOne(context.Background(), bson.M{field: val})
 	if err = res.Err(); err != nil {
-		// todo 没数据的区分
 		return
 	}
 	err = res.Decode(result)
 	return
 }
 
-/**
- * 通过多个字段map查询单个数据
- *
- * param: *mongo.Collection      coll
- * param: interface{}            result - 结构体指针
- * param: map[string]interface{} where
- * param: ...map[string]int      sorts
- * return: error
- */
-func (model *Mgo) GetOneByMap(result interface{}, where map[string]interface{}, sorts ...map[string]int) (err error) {
-	filter := bson.M{}
-	for k, v := range where {
-		filter[k] = v
-	}
+// 通过多个字段map查询单个数据
+
+func (s *Mgo) GetOneByMap(result any, where map[string]any, sorts ...map[string]int) (err error) {
 	opts := options.FindOne()
 	if len(sorts) > 0 {
 		opts.SetSort(sorts[0])
 	}
-	res := model.GetCollection().FindOne(context.Background(), filter, opts)
+	res := s.GetCollection().FindOne(context.Background(), where, opts)
 	if err = res.Err(); err != nil {
 		return
 	}
@@ -200,26 +202,15 @@ func (model *Mgo) GetOneByMap(result interface{}, where map[string]interface{}, 
 	return
 }
 
-/**
- * 通过多个字段map查询多条数据
+// 通过多个字段map查询多条数据
 
- * param: *mongo.Collection      coll
- * param: interface{}            results - map的指针
- * param: map[string]interface{} where
- * param: ...map[string]int      sorts
- * return: error
- */
-func (model *Mgo) GetAllByMap(results interface{}, where map[string]interface{}, sorts ...map[string]int) (err error) {
-	filter := bson.M{}
-	for k, v := range where {
-		filter[k] = v
-	}
+func (s *Mgo) GetAllByMap(results any, where map[string]any, sorts ...map[string]int) (err error) {
 	opts := options.Find()
 	if len(sorts) > 0 {
 		opts.SetSort(sorts[0])
 	}
 	ctx := context.Background()
-	cur, err := model.GetCollection().Find(ctx, filter, opts)
+	cur, err := s.GetCollection().Find(ctx, where, opts)
 	if err != nil {
 		return
 	}
@@ -229,28 +220,14 @@ func (model *Mgo) GetAllByMap(results interface{}, where map[string]interface{},
 	return
 }
 
-/**
- * 通过多个字段map查询多条数据
+// 通过多个字段map查询多条数据
 
- * param: *mongo.Collection      coll
- * param: interface{}            results - map的指针
- * param: int      				 page - 页码(从1开始)
- * param: int                    size
- * param: map[string]interface{} where
- * param: ...map[string]int      sorts
- * return: error
- */
-func (model *Mgo) List(results interface{}, where map[string]interface{}, page, size int, sorts ...map[string]int) (err error) {
+func (s *Mgo) List(results any, where map[string]any, page, size int, sorts ...map[string]int) (err error) {
 	// page从1开始
 	if page > 1 {
 		page--
 	} else {
 		page = 0
-	}
-	// 组装数据
-	filter := bson.M{}
-	for k, v := range where {
-		filter[k] = v
 	}
 	opts := options.Find()
 	opts.SetLimit(int64(size))
@@ -259,7 +236,7 @@ func (model *Mgo) List(results interface{}, where map[string]interface{}, page, 
 		opts.SetSort(sorts[0])
 	}
 	var ctx = context.Background()
-	cur, err := model.GetCollection().Find(ctx, filter, opts)
+	cur, err := s.GetCollection().Find(ctx, where, opts)
 	if err != nil {
 		return
 	}
@@ -269,69 +246,10 @@ func (model *Mgo) List(results interface{}, where map[string]interface{}, page, 
 	return
 }
 
-/**
- * 更新数据 - 通过map匹配字段
- *
- * param: *mongo.Collection      coll
- * param: int                    id
- * param: map[string]interface{} input
- * return: error
- */
-func (model *Mgo) Update(id interface{}, input map[string]interface{}) error {
-	// 组装数据
-	data := bson.M{}
-	for k, v := range input {
-		data[k] = v
-	}
-	_, err := model.GetCollection().UpdateOne(getContext(), bson.M{"_id": id}, bson.D{{"$set", data}})
-	return err
-}
+// 更新数据 - 通过map匹配字段
 
-/**
- * 更新数据 - 通过map匹配字段
- *
- * param: *mongo.Collection      coll
- * param: int                    id
- * param: map[string]interface{} input
- * return: error
- */
-func (model *Mgo) UpdateByMap(where map[string]interface{}, input map[string]interface{}) error {
-	// 组装数据
-	whereC := bson.M{}
-	for k, v := range where {
-		whereC[k] = v
-	}
-	// 组装数据
-	data := bson.M{}
-	for k, v := range input {
-		data[k] = v
-	}
-	_, err := model.GetCollection().UpdateMany(getContext(), whereC, bson.D{{"$set", data}})
-	return err
-}
-
-/**
- * 插入数据 - 通过结构体
- * param: *mongo.Collection      coll
- * param: map[string]interface{} item
- * return: error
- */
-func (model *Mgo) Create(item interface{}) error {
-	_, err := model.GetCollection().InsertOne(getContext(), item)
-	return err
-}
-
-/**
- * 批量插入数据 - 通过结构体
- * param: *mongo.Collection      coll
- * param: map[string]interface{} item
- * return: error
- */
-func (model *Mgo) InsertMany(items []interface{}) error {
-	if len(items) == 0 {
-		return nil
-	}
-	_, err := model.GetCollection().InsertMany(getContext(), items)
+func (s *Mgo) Update(id any, input map[string]any) error {
+	_, err := s.GetCollection().UpdateOne(getContext(), bson.M{"_id": id}, bson.D{{"$set", input}})
 	return err
 }
 
@@ -339,69 +257,85 @@ func (model *Mgo) InsertMany(items []interface{}) error {
  * 更新数据 - 通过结构体
  * -- !!!注意!!!
  * -- 这里会覆盖所有字段,除了id
- *
- * param: *mongo.Collection      coll
- * param: int                    id
- * param: map[string]interface{} input
- * return: error
  */
-func (model *Mgo) Save(id interface{}, data interface{}) error {
-	_, err := model.GetCollection().UpdateOne(getContext(), bson.M{"_id": id}, bson.D{{"$set", data}})
+
+func (s *Mgo) Save(id any, data any) error {
+	update := make(bson.M, 0)
+	// 先解析成bson
+	bytes, err := bson.Marshal(data)
+	if err != nil {
+		return err
+	}
+	// 解析bson到bson.M
+	err = bson.Unmarshal(bytes, &update)
+	if err != nil {
+		return err
+	}
+	// 删除id
+	delete(update, "_id")
+	return s.Update(id, update)
+}
+
+// 更新数据 - 通过map匹配字段
+
+func (s *Mgo) UpdateByMap(where map[string]any, input map[string]any) error {
+	_, err := s.GetCollection().UpdateMany(getContext(), where, bson.D{{"$set", input}})
 	return err
 }
 
-/**
- * 硬删除一条
- *
- * param: *mongo.Collection      coll
- * param: interface{}            id
- * return: error
- */
-func (model *Mgo) ForceDelete(id interface{}) error {
-	_, err := model.GetCollection().DeleteOne(getContext(), bson.M{"_id": id})
+// 插入数据 - 通过结构体或map
+
+func (s *Mgo) Create(item any) error {
+	_, err := s.GetCollection().InsertOne(getContext(), item)
 	return err
 }
 
-/**
- * 硬删除多条
- *
- * param: *mongo.Collection      coll
- * param: map[string]interface{} where
- * return: error
- */
-func (model *Mgo) ForceDeleteByMap(where map[string]interface{}) error {
+// 批量插入数据 - 通过结构体或map
+
+func (s *Mgo) InsertMany(items []any) error {
+	if len(items) == 0 {
+		return nil
+	}
+	_, err := s.GetCollection().InsertMany(getContext(), items)
+	return err
+}
+
+// 硬删除一条
+
+func (s *Mgo) ForceDelete(id any) error {
+	_, err := s.GetCollection().DeleteOne(getContext(), bson.M{"_id": id})
+	return err
+}
+
+// ForceDeleteByMap 硬删除多条
+func (s *Mgo) ForceDeleteByMap(where map[string]any) error {
 	// 组装数据
 	whereC := bson.M{}
 	for k, v := range where {
 		whereC[k] = v
 	}
-	//log.Println("where", whereC)
-	_, err := model.GetCollection().DeleteMany(getContext(), whereC)
+	_, err := s.GetCollection().DeleteMany(getContext(), whereC)
 	return err
 }
 
-/**
- * 聚合查询 - aggregate
- *
- * param: *mongo.Collection coll
- * param: string  pipeStr - aggregate操作json字符串
+// Aggregate 聚合查询 - aggregate
+/*
+pipeStr - aggregate操作json字符串
    如:	pipeline := `[
 		{"$match": { "color": "Red" }},
 		{"$group": { "_id": "$brand", "count": { "$sum": 1 } }},
 		{"$project": { "brand": "$_id", "_id": 0, "count": 1 }}
 	]`
- * param: interface{}       results
- * return: error
 */
-func (model *Mgo) Aggregate(pipeStr string, results interface{}) error {
+
+func (s *Mgo) Aggregate(pipeStr string, results any) error {
 	var ctx = context.Background()
 	opts := options.Aggregate()
-	pipe, err := model.parsePipeline(pipeStr)
+	pipe, err := s.parsePipeline(pipeStr)
 	if err != nil {
 		return err
 	}
-	//util.Log.Info("pipe", pipeStr, pipe)
-	cur, err := model.GetCollection().Aggregate(context.Background(), pipe, opts)
+	cur, err := s.GetCollection().Aggregate(context.Background(), pipe, opts)
 	if err != nil {
 		return err
 	}
@@ -417,7 +351,7 @@ func (model *Mgo) Aggregate(pipeStr string, results interface{}) error {
  * param: string str - bson字符串
  * return: mongo.Pipeline
  */
-func (model *Mgo) parsePipeline(str string) (pipeline mongo.Pipeline, err error) {
+func (s *Mgo) parsePipeline(str string) (pipeline mongo.Pipeline, err error) {
 	pipeline = []bson.D{}
 	str = strings.TrimSpace(str)
 	if strings.Index(str, "[") != 0 {
@@ -460,7 +394,8 @@ func (model *Mgo) parsePipeline(str string) (pipeline mongo.Pipeline, err error)
 }
 
 // 创建索引: keys: map[字段名]排序方式(-1|1)
-func (model *Mgo) CreateIndex(keysD bson.D, Unique bool) (string, error) {
+
+func (s *Mgo) CreateIndex(keysD bson.D, Unique bool) (string, error) {
 	if len(keysD) == 0 {
 		return "", nil
 	}
@@ -473,24 +408,26 @@ func (model *Mgo) CreateIndex(keysD bson.D, Unique bool) (string, error) {
 		keys = append(keys, fmt.Sprintf("%v_%d", e.Key, e.Value))
 	}
 	key := strings.Join(keys, "_")
-	list, err := model.GetCollection().Indexes().ListSpecifications(getContext())
+	list, err := s.GetCollection().Indexes().ListSpecifications(getContext())
 	for _, item := range list {
 		if item.Name == key {
 			return key, nil
 		}
 	}
-	result, err := model.GetCollection().Indexes().CreateOne(getContext(), idx)
+	result, err := s.GetCollection().Indexes().CreateOne(getContext(), idx)
 	return result, err
 }
 
 // 获取索引列表
-func (model *Mgo) ListIndex() ([]*mongo.IndexSpecification, error) {
-	return model.GetCollection().Indexes().ListSpecifications(getContext())
+
+func (s *Mgo) ListIndex() ([]*mongo.IndexSpecification, error) {
+	return s.GetCollection().Indexes().ListSpecifications(getContext())
 }
 
 // 删除索引
-func (model *Mgo) DropIndex(name string) error {
-	_, err := model.GetCollection().Indexes().DropOne(getContext(), name)
+
+func (s *Mgo) DropIndex(name string) error {
+	_, err := s.GetCollection().Indexes().DropOne(getContext(), name)
 	return err
 }
 

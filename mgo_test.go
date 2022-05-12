@@ -9,7 +9,7 @@ import (
 )
 
 func TestMgo_Connect(t *testing.T) {
-	_, err := InitMongoClient("mongodb://127.0.0.1:27017", "cc", 20)
+	_, err := InitMongoClient("mongodb://127.0.0.1:27017", 20)
 	if err != nil {
 		log.Println("init mongo err: ", err.Error())
 		return
@@ -28,13 +28,17 @@ func TestMgo_Connect(t *testing.T) {
 	id, err := TestModel.Create(item)
 	log.Println("id", id, err)
 
+	err = TestModel.Update(id, map[string]interface{}{"age": 18})
+	log.Println("update", err)
+
 	row, err := TestModel.Get(id)
 	log.Println("row", row, err)
 
-	err = TestModel.Update(id, map[string]interface{}{"name": "bbbbbbbbb", "age": 28})
-	log.Println("update", err)
+	row.Name = "dddddddddddd"
+	err = TestModel.Save(row)
+	log.Println("Save", row, err)
 
-	list, err := TestModel.GetAllByMap(map[string]interface{}{"name": "bbbbbbbbb", "age": 28})
+	list, err := TestModel.GetAllByMap(map[string]interface{}{"name": "ccccc", "age": 28})
 	log.Println("list", list, err)
 
 	// 聚合查询
@@ -44,7 +48,7 @@ func TestMgo_Connect(t *testing.T) {
 	//	{"$project": { "brand": "$_id", "_id": 0, "count": 1 }}
 	//]`
 	pipeline := `[
-		{"$match": { "name": bbbbbbbbb }}
+		{"$match": { "name": "ccccc" }}
 	]`
 	items, err := TestModel.Aggregate(pipeline)
 	fmt.Println("items", items, err)
@@ -53,12 +57,19 @@ func TestMgo_Connect(t *testing.T) {
 	}
 }
 
+// 多库多表模式
+func newTestMultiModel(dbName, collName string) *testModel {
+	m := new(testModel)
+	m.Mgo.SetDbColl(dbName, collName)
+	return m
+}
+
 // 单例模式对外导出方法
 var TestModel = newTestModel()
 
 func newTestModel() *testModel {
 	m := new(testModel)
-	m.Mgo.SetCollName("test")
+	m.Mgo.SetDbColl("test", "test")
 	return m
 }
 
@@ -143,6 +154,6 @@ func (model *testModel) ForceDelete(id int) error {
 // 聚合查询
 func (model *testModel) Aggregate(pipeStr string) (items []*Test, err error) {
 	items = make([]*Test, 0)
-	err = model.Mgo.Aggregate(pipeStr, items)
+	err = model.Mgo.Aggregate(pipeStr, &items)
 	return
 }
