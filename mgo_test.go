@@ -9,7 +9,7 @@ import (
 )
 
 func TestMgo_Connect(t *testing.T) {
-	_, err := InitMongoClient("mongodb://127.0.0.1:27017", 20)
+	_, err := InitMongoClient("mongodb://127.0.0.1:27017", "test", 20)
 	if err != nil {
 		log.Println("init mongo err: ", err.Error())
 		return
@@ -60,7 +60,8 @@ func TestMgo_Connect(t *testing.T) {
 // 多库多表模式
 func newTestMultiModel(dbName, collName string) *testModel {
 	m := new(testModel)
-	m.Mgo.SetDbColl(dbName, collName)
+	m.Mgo.SetDbName(dbName)
+	m.Mgo.SetCollName(collName)
 	return m
 }
 
@@ -69,7 +70,7 @@ var TestModel = newTestModel()
 
 func newTestModel() *testModel {
 	m := new(testModel)
-	m.Mgo.SetDbColl("test", "test")
+	m.Mgo.SetCollName("test")
 	return m
 }
 

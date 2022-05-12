@@ -15,7 +15,8 @@ type apiLogModel struct {
 
 func NewApiLogModel(dbName string) *apiLogModel {
 	m := new(apiLogModel)
-	m.Mgo.SetDbColl(dbName, "api_log")
+	m.Mgo.SetDbName(dbName)
+	m.Mgo.SetCollName("api_log")
 	go m.createIndex()
 	return m
 }

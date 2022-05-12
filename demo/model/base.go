@@ -9,7 +9,7 @@ import (
 
 // 初始化
 func Init() {
-	_, em := mgo.InitMongoClient("mongodb://localhost:27017", 50)
+	_, em := mgo.InitMongoClient("mongodb://localhost:27017", "test", 50)
 	if em != nil {
 		log.Println("mongo连接失败:", em.Error())
 		os.Exit(0)

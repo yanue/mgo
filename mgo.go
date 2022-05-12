@@ -15,8 +15,9 @@ import (
 
 type IMgo interface {
 	GetMgoCli() *mongo.Client
-	SetDbColl(dbName string, collName string)
+	SetDbName(dbName string)
 	GetDbName() string
+	SetCollName(collName string)
 	GetCollName() string
 	GetCollection() *mongo.Collection
 	GetLastId() int
@@ -68,12 +69,14 @@ func (s *Session) getSession(name dbCollName) *mongo.Collection {
 }
 
 var mgoCli *mongo.Client
+var mgoDefaultDbName string
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 }
 
-func InitMongoClient(mongoUri string, maxPoolSize uint64) (cli *mongo.Client, err error) {
+func InitMongoClient(mongoUri string, defaultDbName string, maxPoolSize uint64) (cli *mongo.Client, err error) {
+	mgoDefaultDbName = defaultDbName
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cli, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoUri).SetMaxPoolSize(maxPoolSize)) // 最大连接池
@@ -102,8 +105,15 @@ type Mgo struct {
 	lastId  int
 }
 
-func (s *Mgo) SetDbColl(dbName string, collName string) {
+// 库名一般需要加载conf文件才能确认,需要单独设置
+
+func (s *Mgo) SetDbName(dbName string) {
 	s.coll.dbName = dbName
+}
+
+// collection根据struct,可以直接init使用
+
+func (s *Mgo) SetCollName(collName string) {
 	s.coll.collName = collName
 }
 
@@ -112,24 +122,26 @@ func (s *Mgo) GetMgoCli() *mongo.Client {
 }
 
 func (s *Mgo) GetCollName() string {
-	return s.coll.dbName
+	return s.coll.collName
 }
 
 func (s *Mgo) GetDbName() string {
-	return s.coll.collName
+	return s.coll.dbName
 }
 
 func (s *Mgo) GetCollection() *mongo.Collection {
 	if s.session != nil {
 		return s.session
 	}
-	if len(s.coll.dbName) == 0 || len(s.coll.collName) == 0 {
+	if len(s.coll.collName) == 0 {
 		panic("请使用SetDbColl方法设置dbName及collName")
 	}
-	if nil == s.session {
-		// 重点: 表名(集合名)
-		s.session = session.getSession(s.coll)
+	// 默认库
+	if len(s.coll.dbName) == 0 {
+		s.coll.dbName = mgoDefaultDbName
 	}
+	// 重点: 表名(集合名)
+	s.session = session.getSession(s.coll)
 	return s.session
 }
 

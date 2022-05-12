@@ -16,7 +16,8 @@ type userModel struct {
 
 func newUserModel() *userModel {
 	m := new(userModel)
-	m.Mgo.SetDbColl("test", "user")
+	m.Mgo.SetDbName("test")
+	m.Mgo.SetCollName("user")
 	return m
 }
 
