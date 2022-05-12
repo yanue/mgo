@@ -9,10 +9,11 @@
 ### 主要封装方法:
 
 ```
-  type IMgo interface {
+type IMgo interface {
 	GetMgoCli() *mongo.Client
-	SetDbColl(dbName string, collName string)
+	SetDbName(dbName string)
 	GetDbName() string
+	SetCollName(collName string)
 	GetCollName() string
 	GetCollection() *mongo.Collection
 	GetLastId() int
@@ -38,7 +39,7 @@
 ### 第一步,初始化mongo连接
 
 ```
-	m, err := mgo.InitMongoClient(config.MongoUri, 10)
+	m, err := mgo.InitMongoClient(config.MongoUri,"test", 10)
 	if err != nil {
 		log.Println("mongo连接失败:", err.Error())
 		os.Exit(0)
@@ -51,7 +52,8 @@
 // 多库多表模式
 func newTestMultiModel(dbName, collName string) *testModel {
 	m := new(testModel)
-	m.Mgo.SetDbColl(dbName, collName)
+	m.Mgo.SetDbName(dbName)
+	m.Mgo.SetCollName(collName)
 	return m
 }
 
@@ -60,7 +62,7 @@ var TestModel = newTestModel()
 
 func newTestModel() *testModel {
 	m := new(testModel)
-	m.Mgo.SetDbColl("test", "test")
+	m.Mgo.SetCollName("test")
 	return m
 }
 
@@ -153,7 +155,7 @@ func (model *testModel) Aggregate(pipeStr string) (items []*Test, err error) {
 ### 第三步,使用model,测试
 
 ```
-    _, err := InitMongoClient("mongodb://127.0.0.1:27017", 20)
+    _, err := InitMongoClient("mongodb://127.0.0.1:27017", "test", 20)
 	if err != nil {
 		log.Println("init mongo err: ", err.Error())
 		return
