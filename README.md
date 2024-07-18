@@ -27,6 +27,7 @@ type IMgo interface {
 	ForceDelete(id any) error
 	ForceDeleteByMap(where map[string]any) error
 	GetByField(result any, field string, val any) (err error)
+	GetAllWithFields(results any, where map[string]any, _sort map[string]int, fields []string) (err error)
 	GetOneByMap(result any, where map[string]any, sorts ...map[string]int) (err error)
 	GetAllByMap(results any, where map[string]any, sorts ...map[string]int) (err error)
 	List(results any, where map[string]any, page, size int, sorts ...map[string]int) (err error)
