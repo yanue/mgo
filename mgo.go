@@ -237,9 +237,11 @@ func (s *Mgo) GetAllWithFields(results any, where map[string]any, _sort map[stri
 	opts := options.Find()
 	opts.SetSort(_sort)
 	if len(fields) > 0 {
+		var projection = make(bson.M, 0)
 		for _, s2 := range fields {
-			opts.SetProjection(bson.M{s2: 1})
+			projection[s2] = 1
 		}
+		opts.SetProjection(projection)
 	}
 	ctx := context.Background()
 	cur, err := s.GetCollection().Find(ctx, where, opts)
