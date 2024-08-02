@@ -35,6 +35,7 @@ type IMgo interface {
 	GetOneByMap(result any, where map[string]any, sorts ...map[string]int) (err error)
 	GetAllByMap(results any, where map[string]any, sorts ...map[string]int) (err error)
 	List(results any, where map[string]any, page, size int, sorts ...map[string]int) (err error)
+	ListWithFields(results any, where map[string]any, page, size int, _sort map[string]int, fields []string) (err error)
 	Aggregate(pipeStr string, results any) error
 	CreateIndex(keys bson.D, Unique bool) (string, error)
 	DropIndex(name string) error
@@ -268,6 +269,35 @@ func (s *Mgo) List(results any, where map[string]any, page, size int, sorts ...m
 	opts.SetSkip(int64(page * size))
 	if len(sorts) > 0 {
 		opts.SetSort(sorts[0])
+	}
+	var ctx = context.Background()
+	cur, err := s.GetCollection().Find(ctx, where, opts)
+	if err != nil {
+		return
+	}
+	defer cur.Close(ctx)
+	// 解析结果
+	err = cur.All(ctx, results)
+	return
+}
+
+func (s *Mgo) ListWithFields(results any, where map[string]any, page, size int, _sort map[string]int, fields []string) (err error) {
+	// page从1开始
+	if page > 1 {
+		page--
+	} else {
+		page = 0
+	}
+	opts := options.Find()
+	opts.SetLimit(int64(size))
+	opts.SetSkip(int64(page * size))
+	opts.SetSort(_sort)
+	if len(fields) > 0 {
+		var projection = make(bson.M, 0)
+		for _, s2 := range fields {
+			projection[s2] = 1
+		}
+		opts.SetProjection(projection)
 	}
 	var ctx = context.Background()
 	cur, err := s.GetCollection().Find(ctx, where, opts)

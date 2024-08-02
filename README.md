@@ -31,6 +31,7 @@ type IMgo interface {
 	GetOneByMap(result any, where map[string]any, sorts ...map[string]int) (err error)
 	GetAllByMap(results any, where map[string]any, sorts ...map[string]int) (err error)
 	List(results any, where map[string]any, page, size int, sorts ...map[string]int) (err error)
+	ListWithFields(results any, where map[string]any, page, size int, _sort map[string]int, fields []string) (err error)
 	Aggregate(pipeStr string, results any) error
 	CreateIndex(keys bson.D, Unique bool) (string, error)
 	DropIndex(name string) error
