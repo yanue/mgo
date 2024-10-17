@@ -31,6 +31,7 @@ type IMgo interface {
 	ForceDelete(id any) error
 	ForceDeleteByMap(where map[string]any) error
 	GetByField(result any, field string, val any) (err error)
+	GetWithFields(result any, where map[string]any, sorts map[string]int, fields []string) (err error)
 	GetAllWithFields(results any, where map[string]any, _sort map[string]int, fields []string) (err error)
 	GetOneByMap(result any, where map[string]any, sorts ...map[string]int) (err error)
 	GetAllByMap(results any, where map[string]any, sorts ...map[string]int) (err error)
@@ -231,6 +232,22 @@ func (s *Mgo) GetAllByMap(results any, where map[string]any, sorts ...map[string
 	defer cur.Close(ctx)
 	// 解析到map
 	err = cur.All(ctx, results)
+	return
+}
+
+func (s *Mgo) GetWithFields(result any, where map[string]any, sorts map[string]int, fields []string) (err error) {
+	opts := options.FindOne()
+	opts.SetSort(sorts)
+	var projection = make(bson.M, 0)
+	for _, s2 := range fields {
+		projection[s2] = 1
+	}
+	opts.SetProjection(projection)
+	res := s.GetCollection().FindOne(context.Background(), where, opts)
+	if err = res.Err(); err != nil {
+		return
+	}
+	err = res.Decode(result)
 	return
 }
 
